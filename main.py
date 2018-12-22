@@ -100,7 +100,6 @@ def run(in_graph_file, is_cloud):    # converts a graph in an acceptable form in
     for u, edge in s_neighbors.items():
         mr_graph[u][0] = [[edge]]
 
-    #print(mr_graph)
     if "s" not in mr_graph or "t" not in mr_graph:
         print("need to provide source and sink verticies")
         sys.exit(-1)
@@ -125,24 +124,18 @@ def run(in_graph_file, is_cloud):    # converts a graph in an acceptable form in
         else:
             mr_job = ff_mapreduce.MRFlow()
 
-        # mr_job = max_flow.MRFlow()
         mr_job.stdin = infile
-        # print("here")
         with mr_job.make_runner() as runner:
             # perform iteration of MapReduce
             runner.run()
 
             # process map reduce output
-            print(runner.cat_output)
-            print("\n")
-
             out_buffer = []
 
             for line in get_lines(runner.cat_output()):
                 line = line.decode()
                 print("DEBUG", line)
                 sys.stdout.flush()
-                # print str(counter) + ": " + line
                 try:
                     kv_pair = line.split("\t")
                     key = kv_pair[0]
@@ -198,7 +191,7 @@ def run(in_graph_file, is_cloud):    # converts a graph in an acceptable form in
     return min_cut
 
 in_graph_file = sys.argv[1]
-is_cloud = sys.argv[2] == 'cloud'
+is_cloud = False
 max_flow, _ = run(in_graph_file, is_cloud)
 print("max_flow={0}".format(max_flow))
 sys.stdout.flush()
