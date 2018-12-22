@@ -170,7 +170,7 @@ def run(in_graph_file, is_cloud):    # converts a graph in an acceptable form in
                 new_line = json_to_string(key)
                 new_line += "\t"
                 new_line += json_to_string(value)
-                new_line += "\t"
+                new_line += "\n"
                 outfile.write(new_line)
             
             converge_count, previous_count = is_terminated(runner, converge_count, previous_count)
