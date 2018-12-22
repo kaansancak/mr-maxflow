@@ -6,15 +6,16 @@ import json
 
 import ff_mapreduce
 
-def json_to_string(json_obj):
-    return json.dumps(json_obj)
-
 def is_terminated(job, current, prev):
     source_counter = job.counters()[0]["move"]["source"]
     new_value = 5 if source_counter != prev else current - 1
     current = new_value
     prev = source_counter
     return current, prev
+
+
+def json_to_string(json_obj):
+    return json.dumps(json_obj)
 
 def augment_graph(graph, augmented_edges):
     # copy graph
@@ -55,11 +56,12 @@ def augment_graph(graph, augmented_edges):
     return g
 
 
-def run(in_graph_file, is_cloud):    # converts a graph in an acceptable form into a representation
-
+def run(in_graph_file, is_cloud):
+    # converts a graph in an acceptable form into a representation
+    # that is usable in MapReduce
     mr_file_name = "mr_max_flow.txt"
+   
     graph_file = open(in_graph_file, "r")
-
     original_graph = digraph()
     for line in graph_file:
         kv_pair = line.split("\t")
@@ -68,46 +70,45 @@ def run(in_graph_file, is_cloud):    # converts a graph in an acceptable form in
         edges = kv_pair[1]
         edges = json.loads(edges)
 
-        if not original_graph.has_node(vertex):
-            original_graph.add_node(vertex)
-        for edge in edges:
-            v, e_c = edge
-            if not original_graph.has_node(v):
-                original_graph.add_node(v)
-            original_graph.add_edge((vertex, v), wt=e_c)
+        node_exists = original_graph.has_node(vertex)
+        if node_exists == False: original_graph.add_node(vertex)
 
-    s_neighbors = {}
+        for edge in edges:
+            node_exists = original_graph.has_node(edge[0])
+            if node_exists == False: original_graph.add_node(edge[0])
+            original_graph.add_edge((vertex, edge[0]), wt=edge[1])
+
+    neighbors_of_s = {}
     mr_graph = {}
 
-    for u in original_graph.nodes():
-        E_u = []
-        S_u = []
-        T_u = []
+    for source_vertex in original_graph.nodes():
+        node_properties = list()
+        node_properties.append(list())
+        node_properties.append(list())
+        node_properties.append(list())
 
-        for v in original_graph.neighbors(u):
-            e_c = original_graph.edge_weight((u, v))
-            new_edge = [v, "{0},{1}".format(u, v), 0, e_c]
-            E_u.append(new_edge)
+        for destionation_vertex in original_graph.neighbors(source_vertex):
+            edge = (source_vertex, destionation_vertex)
+            new_edge = [edge[1], edge[0] + "," + edge[1], 0, original_graph.edge_weight(edge)]
+            node_properties[0].append(new_edge)
 
-            # assumes verticies in neighbor list are unique
-            if u == "s":
-                s_neighbors[v] = new_edge
-            if v == "t":
-                T_u.append([new_edge])
+            is_source = edge[0] == "s"
+            is_sink = edge[1] == "t"
+            if is_source: neighbors_of_s[edge[1]] = new_edge
+            if is_sink: node_properties[2].append([new_edge])
 
-        mr_graph[u] = [S_u, T_u, E_u]
+        mr_graph[source_vertex] = [node_properties[1], node_properties[2], node_properties[0]]
 
-    for u, edge in s_neighbors.items():
+    for u, edge in neighbors_of_s.items():
         mr_graph[u][0] = [[edge]]
 
-    if "s" not in mr_graph or "t" not in mr_graph:
-        print("need to provide source and sink verticies")
-        sys.exit(-1)
-
     outfile = open(mr_file_name, "w")
-    for vertex_id, vertex_info in mr_graph.items():
-        vertex_info.append({})
-        new_line = json.dumps(vertex_id) + "\t" + json.dumps(vertex_info) + "\n"
+    for key in mr_graph:
+        mr_graph[key].append({})
+        new_line = json_to_string(key)
+        new_line += "\t"
+        new_line += json_to_string(mr_graph[key])
+        new_line += "\n"
         outfile.write(new_line)
     outfile.close()
 
@@ -124,74 +125,64 @@ def run(in_graph_file, is_cloud):    # converts a graph in an acceptable form in
         else:
             mr_job = ff_mapreduce.MRFlow()
 
+        # mr_job = max_flow.MRFlow()
         mr_job.stdin = infile
-        with mr_job.make_runner() as runner:
-            # perform iteration of MapReduce
-            runner.run()
+        # print("here")
+        runner = mr_job.make_runner()
+        runner.run()
+        out_buffer = []
 
-            # process map reduce output
-            out_buffer = []
-
-            for line in get_lines(runner.cat_output()):
-                line = line.decode()
-                print("DEBUG", line)
-                sys.stdout.flush()
-                try:
-                    kv_pair = line.split("\t")
-                    key = kv_pair[0]
-                    key = json.loads(key)
-                    value = kv_pair[1]
-                    value = json.loads(value)
-                except:
-                    continue
-
-                if key == "A_p":
-                    A_p = value
-                    for edge, flow in A_p.items():
-                        if flow == 0:
-                            print("zero flow for edge: " + str(edge))
-                        if edge in augmented_edges:
-                            augmented_edges[edge] += flow
-                        else:
-                            augmented_edges[edge] = flow
-                else:
-                    out_buffer.append(line)
-
-            # write map reduce output to file for next iteration
-            outfile = open(mr_file_name, "w")
-            for line in out_buffer:
+        for line in get_lines(runner.cat_output()):
+            line = line.decode()
+            try:
                 kv_pair = line.split("\t")
                 key = kv_pair[0]
-                vertex = json.loads(key)
+                key = json.loads(key)
                 value = kv_pair[1]
                 value = json.loads(value)
+            except:
+                continue
 
-                value.append(A_p)
-                new_line = json_to_string(key)
-                new_line += "\t"
-                new_line += json_to_string(value)
-                new_line += "\n"
-                outfile.write(new_line)
-            
-            converge_count, previous_count = is_terminated(runner, converge_count, previous_count)
+            if key == "A_p":
+                A_p = value
+                for edge in A_p:
+                    is_edge_augmented = edge in augmented_edges
+                    augmented_edges[edge] = augmented_edges[edge] + A_p[edge] if is_edge_augmented else A_p[edge]
+            else:
+                out_buffer.append(line)
+
+        # write map reduce output to file for next iteration
+        outfile = open(mr_file_name, "w")
+        for line in out_buffer:
+            kv_pair = line.split("\t")
+            key = kv_pair[0]
+            key = json.loads(key)
+            value = kv_pair[1]
+            value = json.loads(value)
+
+            value.append(A_p)
+            new_line = json_to_string(key)
+            new_line += "\t"
+            new_line += json_to_string(value)
+            new_line += "\n"
+            outfile.write(new_line)
+
+        converge_count, previous_count = is_terminated(runner, converge_count, previous_count)
 
         infile.close()
         outfile.close()
 
     augmented_graph = augment_graph(original_graph, augmented_edges)
 
-    # find cut
-    preordering = dfs(augmented_graph, "s")[1]
-    min_cut = 0
-    for edge in original_graph.edges():
-        u, v = edge
-        if u in preordering and v not in preordering:
-            min_cut += original_graph.edge_weight(edge)
+    cut_nodes = dfs(augmented_graph, "s")[1]
+    edges = original_graph.edges()
+    edges = list(filter(lambda edge: edge[0] in cut_nodes and edge[1] not in cut_nodes, edges))
+    edge_weights = list(map(lambda edge: original_graph.edge_weight(edge), edges))
+    max_flow = sum(edge_weights)
 
-    return min_cut
+    return max_flow
 
 in_graph_file = sys.argv[1]
 is_cloud = False
-max_flow, _ = run(in_graph_file, is_cloud)
-print("max_flow={0}".format(max_flow))
-sys.stdout.flush()
+max_flow = run(in_graph_file, is_cloud)
+print("max_flow:", max_flow)
