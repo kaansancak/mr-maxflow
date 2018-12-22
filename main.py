@@ -3,7 +3,6 @@ from python_graph.searching import depth_first_search as dfs
 from mrjob.util import to_lines as get_lines
 import sys
 import json
-
 import ff_mapreduce
 
 def is_terminated(job, current, prev):
@@ -13,47 +12,49 @@ def is_terminated(job, current, prev):
     prev = source_counter
     return current, prev
 
-
 def json_to_string(json_obj):
     return json.dumps(json_obj)
 
+def copy_graph(other): 
+    old_nodes = other.nodes()
+    new_graph = digraph()
+    new_graph.add_nodes(old_nodes)
+    old_edges = other.edges()
+    for edge in old_edges:
+        edge_weight = other.edge_weight(edge)
+        new_graph.add_edge(edge, edge_weight)
+    return new_graph
+
 def augment_graph(graph, augmented_edges):
-    # copy graph
-    g = digraph()
-    g.add_nodes(graph.nodes())
-    for edge in graph.edges():
-        g.add_edge(edge, wt=graph.edge_weight(edge))
 
-    # update edge weights based on augmentation
-    for u in g.nodes():
-        for v in g.neighbors(u):
-            e_id = "{0},{1}".format(u, v)
-            if e_id in augmented_edges:
-                flow = augmented_edges[e_id]
+    new_graph = copy_graph(graph)
+    nodes = new_graph.nodes()
 
-                # update forward edge
-                f_e = (u, v)
-                residue = g.edge_weight(f_e) - flow
-                g.set_edge_weight(f_e, residue)
+    for node in nodes:
+        for neighbor in new_graph.neighbors(node):
+            vertex_pair = [node, neighbor]
+
+            edge = vertex_pair[0] + "," + vertex_pair[1]
+            is_edge_augmented = edge in augmented_edges
+            if is_edge_augmented:
+                flow = augmented_edges[edge]
+
+                residue = new_graph.edge_weight((vertex_pair[0], vertex_pair[1])) - flow
+                new_graph.set_edge_weight((vertex_pair[0], vertex_pair[1]), residue)
                 if residue < 0:
-                    print("Fatal error: negative edge residue")
                     sys.exit(-1)
 
-                # update back edge
-                r_id = "{0},{1}".format(v, u)
-                b_e = (v, u)
-                if g.has_edge(b_e):
-                    new_weight = g.edge_weight(b_e) + flow
-                    g.set_edge_weight(b_e, new_weight)
+                if new_graph.has_edge((vertex_pair[1], vertex_pair[0])):
+                    new_weight = new_graph.edge_weight((vertex_pair[1], vertex_pair[0])) + flow
+                    new_graph.set_edge_weight((vertex_pair[1], vertex_pair[0]), new_weight)
                 else:
-                    g.add_edge(b_e, wt=flow)
+                    new_graph.add_edge((vertex_pair[1], vertex_pair[0]), wt=flow)
 
-    # remove edges with zero or less capacity
-    for edge in g.edges():
-        if g.edge_weight(edge) == 0:
-            g.del_edge(edge)
+    zero_edges = list(filter(lambda edge: new_graph.edge_weight(edge) == 0, new_graph.edges()))
+    for edge in new_graph.edges():
+        if edge in zero_edges: new_graph.del_edge(edge)
 
-    return g
+    return new_graph
 
 
 def run(in_graph_file, is_cloud):
@@ -172,7 +173,32 @@ def run(in_graph_file, is_cloud):
         infile.close()
         outfile.close()
 
-    augmented_graph = augment_graph(original_graph, augmented_edges)
+    augmented_graph = copy_graph(original_graph)
+    nodes = augmented_graph.nodes()
+
+    for node in nodes:
+        for neighbor in augmented_graph.neighbors(node):
+            vertex_pair = [node, neighbor]
+
+            edge = vertex_pair[0] + "," + vertex_pair[1]
+            is_edge_augmented = edge in augmented_edges
+            if is_edge_augmented:
+                flow = augmented_edges[edge]
+
+                residue = augmented_graph.edge_weight((vertex_pair[0], vertex_pair[1])) - flow
+                augmented_graph.set_edge_weight((vertex_pair[0], vertex_pair[1]), residue)
+                if residue < 0:
+                    sys.exit(-1)
+
+                if augmented_graph.has_edge((vertex_pair[1], vertex_pair[0])):
+                    new_weight = augmented_graph.edge_weight((vertex_pair[1], vertex_pair[0])) + flow
+                    augmented_graph.set_edge_weight((vertex_pair[1], vertex_pair[0]), new_weight)
+                else:
+                    augmented_graph.add_edge((vertex_pair[1], vertex_pair[0]), wt=flow)
+
+    zero_edges = list(filter(lambda edge: augmented_graph.edge_weight(edge) == 0, augmented_graph.edges()))
+    for edge in augmented_graph.edges():
+        if edge in zero_edges: augmented_graph.del_edge(edge)
 
     cut_nodes = dfs(augmented_graph, "s")[1]
     edges = original_graph.edges()
