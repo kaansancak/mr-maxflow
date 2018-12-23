@@ -130,10 +130,19 @@ class MRFlow(mrjob.job.MRJob):
         for item in counter_init:
             self.increment_counter(item[0], item[1], item[2])
 
-        if u == "t":
-            yield "A_p", A_p.edges
+        is_sink = u== "t"
+        if is_sink:
+            key = "A_p"
+            value = A_p.edges
+            yield key, value
 
-        yield (u, [S_u, T_u, E_u])
+        key = u
+        value = list()
+        value.append(S_u)
+        value.append(T_u)
+        value.append(E_u)
+
+        yield key, value
 
     def steps(self):
         return [mrjob.step.MRStep(mapper=self.mapper, reducer=self.reducer)]
