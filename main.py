@@ -208,7 +208,22 @@ def run(in_graph_file, is_cloud):
 
     return max_flow
 
+
 in_graph_file = sys.argv[1]
-is_cloud = False
+
+if len(sys.argv) != 3:
+    print("Please choose input file and environment to be run")
+    print("Example usage: python3 main.py graph_file.txt local")
+    print("Example usage: python3 main.py graph_file.txt cloud")
+    sys.exit()
+
+if sys.argv[2] == "cloud":
+    is_cloud = True
+elif sys.argv[2] == "local":
+    is_cloud = False
+else:
+    print("Environment must be 'local' or 'cloud'")
+    sys.exit()
+
 max_flow = run(in_graph_file, is_cloud)
 print("max_flow:", max_flow)
