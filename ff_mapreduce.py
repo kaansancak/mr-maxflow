@@ -40,7 +40,7 @@ class Accumulator:
 MAX_PATHS = 10
 
 def edge_forms_cycle(new_edge, path):
-    return any(path.map(lambda edge: edge[0] == new_edge[0]))
+    return any(map(lambda edge: edge[0] == new_edge[0], path))
 
 def update_edge(edge, augmented_edges, saturated_edges):
     edge_option = augmented_edges.get(edge[1], None)
@@ -50,6 +50,7 @@ def update_edge(edge, augmented_edges, saturated_edges):
 
     if edge_option!= None and edge[2] >= edge[3] and saturated_edges.count(edge[1]) == 0:
         saturated_edges.append(edge[1])
+
 
 class MRFlow(mrjob.job.MRJob):
     OUTPUT_PROTOCOL, INPUT_PROTOCOL = (mrjob.protocol.JSONProtocol, mrjob.protocol.JSONProtocol)
@@ -68,7 +69,6 @@ class MRFlow(mrjob.job.MRJob):
             for edge in path:
                 update_edge(edge, augmented_edges, saturated_edges)
 
-        # remove saturated excess paths
         for e_id in saturated_edges:
             for path in node_info[0]:
                 if path.count(e_id) > 0:
@@ -78,7 +78,6 @@ class MRFlow(mrjob.job.MRJob):
                 if path.count(e_id) > 0:
                     node_info[1].remove(path)
 
-        # attempt to combine source and sink excess paths
         accumulator = Accumulator()
 
         for source_path in node_info[0]:
@@ -90,7 +89,6 @@ class MRFlow(mrjob.job.MRJob):
             for edge in node_info[2]:
                 yield (edge[0], [[[[edge[0], edge[1], edge[2], edge[3]]]], list(), list()])
 
-        # extends source excess paths
         if len(node_info[0]) > 0:
             for edge in node_info[2]:
                 e_v, e_f, e_c = edge[0], edge[2], edge[3]
@@ -113,7 +111,7 @@ class MRFlow(mrjob.job.MRJob):
         E_u = list()
 
         for val in values:
-            if len(values[2]) > 0:
+            if len(val[2]) > 0:
                 S_m = val[0]
                 T_m = val[1]
                 E_u = val[2]
@@ -125,13 +123,13 @@ class MRFlow(mrjob.job.MRJob):
                 if u != "t" and len(S_u) < MAX_PATHS and A_s.accept(se):
                     S_u.append(se)
 
-            for te in T_v:
+            for te in val[1]:
                 if len(T_u) < MAX_PATHS and A_t.accept(te):
                     T_u.append(te)
 
         counter_init = [("move", "source", 0), ("move", "source", 0), ("move", "source", len(S_u))]
         for item in counter_init:
-            self.increment_counter(counter_init[0], counter_init[1], counter_init[2])
+            self.increment_counter(item[0], item[1], item[2])
 
         if u == "t":
             yield "A_p", A_p.edges
