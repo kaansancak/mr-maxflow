@@ -7,7 +7,7 @@ class Accumulator:
     def accept(self, augmenting_path):
         valid_path, min_flow = (True, 1000000)
 
-        for index, edge in enumerate(augmenting_path):
+        for edge in augmenting_path:
             edge_option = self.edges.get(edge[1], None)
 
             if edge_option == None:
@@ -35,7 +35,7 @@ class Accumulator:
 
                 id_option = self.edges.get(edge[1], None)
                 self.edges[edge[1]] = self.edges[edge[1]] + min_flow if id_option != None else min_flow
-                return True
+            return True
 
 MAX_PATHS = 10
 
@@ -116,7 +116,6 @@ class MRFlow(mrjob.job.MRJob):
                 T_m = val[1]
                 E_u = val[2]
 
-            # merge and filter S_v
             for se in val[0]:
                 if u == "t":
                     A_p.accept(se)
