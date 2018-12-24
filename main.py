@@ -116,7 +116,7 @@ def run(in_graph_file, is_cloud):
     augmented_edges = {}
 
     # counters to keep track of convergence of MapReduce jobs
-    converge_count = 5
+    converge_count = 1
     previous_count = -1
 
     while converge_count != 0:
