@@ -1,7 +1,6 @@
 __pycache__/
 .vscode/
 libarary/
-python_graph/
 graphs/
 .DS_Store
 mr_max_flow.txt
