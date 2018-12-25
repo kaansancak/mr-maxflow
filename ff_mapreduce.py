@@ -39,7 +39,7 @@ class Accumulator:
             return False
         else:
             for edge in augmenting_path:
-                # check if edge is in path
+                # check if edge is already in path
                 id_option = self.edges.get(edge[1], None)
                 # if it is not, set flow on edge to min_flow
                 # else set flow on edge to (flow on edge + min_flow)
@@ -129,9 +129,9 @@ class MRFlow(mrjob.job.MRJob):
 
     def reducer(self, u, values):
         # initialize new Accumulators
-        A_p = Accumulator()
-        A_s = Accumulator()
-        A_t = Accumulator()
+        A_p = Accumulator() # store non conflicting augmenting paths
+        A_s = Accumulator() # store non conflicting source excess paths
+        A_t = Accumulator() # store non conflicting sink excess paths
 
         S_u = list() # source excess paths
         T_u = list() # sink excess paths
@@ -142,15 +142,17 @@ class MRFlow(mrjob.job.MRJob):
         # val[2] = list of edges connecting vertex to neighbour
         for val in values:
             if len(val[2]) > 0:
+                # store neighbours of master
                 E_u = val[2]
 
-            # merge and filter S_v
+            # merge and filter source excess paths to vertex
             for se in val[0]:
                 if u == "t":
                     A_p.accept(se)
                 if u != "t" and len(S_u) < MAX_PATHS and A_s.accept(se):
                     S_u.append(se)
 
+            # accumulate sink excess paths
             for te in val[1]:
                 if len(T_u) < MAX_PATHS and A_t.accept(te):
                     T_u.append(te)
@@ -160,7 +162,8 @@ class MRFlow(mrjob.job.MRJob):
         for item in counter_init:
             self.increment_counter(item[0], item[1], item[2])
 
-        is_sink = u== "t"
+        # generate augmenting path
+        is_sink = u == "t"
         if is_sink:
             key = "A_p"
             value = A_p.edges
