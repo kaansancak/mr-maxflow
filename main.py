@@ -25,38 +25,6 @@ def copy_graph(other):
         new_graph.add_edge(edge, edge_weight)
     return new_graph
 
-def augment_graph(graph, augmented_edges):
-
-    new_graph = copy_graph(graph)
-    nodes = new_graph.nodes()
-
-    for node in nodes:
-        for neighbor in new_graph.neighbors(node):
-            vertex_pair = [node, neighbor]
-
-            edge = vertex_pair[0] + "," + vertex_pair[1]
-            is_edge_augmented = edge in augmented_edges
-            if is_edge_augmented:
-                flow = augmented_edges[edge]
-
-                residue = new_graph.edge_weight((vertex_pair[0], vertex_pair[1])) - flow
-                new_graph.set_edge_weight((vertex_pair[0], vertex_pair[1]), residue)
-                if residue < 0:
-                    sys.exit(-1)
-
-                if new_graph.has_edge((vertex_pair[1], vertex_pair[0])):
-                    new_weight = new_graph.edge_weight((vertex_pair[1], vertex_pair[0])) + flow
-                    new_graph.set_edge_weight((vertex_pair[1], vertex_pair[0]), new_weight)
-                else:
-                    new_graph.add_edge((vertex_pair[1], vertex_pair[0]), wt=flow)
-
-    zero_edges = list(filter(lambda edge: new_graph.edge_weight(edge) == 0, new_graph.edges()))
-    for edge in new_graph.edges():
-        if edge in zero_edges: new_graph.del_edge(edge)
-
-    return new_graph
-
-
 def run(in_graph_file, is_cloud):
     # converts a graph in an acceptable form into a representation
     # that is usable in MapReduce
